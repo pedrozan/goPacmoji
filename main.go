@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // Player is the player character
@@ -45,6 +46,8 @@ func loadMaze() error {
 				player = Player{row, col}
 			case 'G':
 				ghosts = append(ghosts, &Ghost{row, col})
+			case '.':
+				numDots++
 			}
 		}
 	}
@@ -53,6 +56,9 @@ func loadMaze() error {
 }
 
 var maze []string
+var score int
+var numDots int
+var lives = 1
 
 func clearScreen() {
 	fmt.Printf("\x1b[2J")
@@ -69,6 +75,8 @@ func printScreen() {
 		for _, chr := range line {
 			switch chr {
 			case '#':
+				fallthrough
+			case '.':
 				fmt.Printf("%c", chr)
 			default:
 				fmt.Printf(" ")
@@ -84,6 +92,10 @@ func printScreen() {
 		moveCursor(g.row, g.col)
 		fmt.Printf("G")
 	}
+
+	// Print score
+	moveCursor(len(maze)+1, 0)
+	fmt.Printf("Score: %v\nLives: %v\n", score, lives)
 }
 
 func readInput() (string, error) {
@@ -150,6 +162,13 @@ func makeMove(oldRow, oldCol int, dir string) (newRow, newCol int) {
 
 func movePlayer(dir string) {
 	player.row, player.col = makeMove(player.row, player.col, dir)
+	switch maze[player.row][player.col] {
+	case '.':
+		numDots--
+		score++
+		// remove dot from the maze
+		maze[player.row] = maze[player.row][0:player.col] + " " + maze[player.row][player.col+1:]
+	}
 }
 
 func drawDirection() string {
@@ -170,7 +189,7 @@ func moveGhosts() {
 	}
 }
 
-func init() {
+func initialize() {
 	cbTerm := exec.Command("/bin/stty", "cbreak", "-echo")
 	cbTerm.Stdin = os.Stdin
 
@@ -192,6 +211,7 @@ func cleanup() {
 
 func main() {
 	// initialize game
+	initialize()
 	defer cleanup()
 
 	// load resources
@@ -201,29 +221,51 @@ func main() {
 		return
 	}
 
+	// process input
+	input := make(chan string)
+	go func(ch chan<- string) {
+		for {
+			input, err := readInput()
+			if err != nil {
+				log.Printf("Error reading input: %v", err)
+				ch <- "ESC"
+			}
+			ch <- input
+		}
+	}(input)
+
 	// game loop
 	for {
 		// update screen
 		printScreen()
 
-		// process input
-		input, err := readInput()
-		if err != nil {
-			log.Printf("Error reading input: %v\n", err)
-			break
-		}
-
 		// process movement
-		movePlayer(input)
+		select {
+		case inp := <-input:
+			if inp == "ESC" {
+				lives = 0
+			}
+			movePlayer(inp)
+		default:
+		}
 		moveGhosts()
 
 		// process colisions
+		for _, g := range ghosts {
+			if player.row == g.row && player.col == g.col {
+				lives = 0
+			}
+		}
+
+		// update screen
+		printScreen()
 
 		// check game over
-		if input == "ESC" {
+		if numDots == 0 || lives == 0 {
 			break
 		}
 
 		// repeat
+		time.Sleep(200 * time.Millisecond)
 	}
 }
