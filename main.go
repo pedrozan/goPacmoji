@@ -3,12 +3,18 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"time"
+)
+
+var (
+	configFile = flag.String("config-file", "config.json", "path to custom configuration file")
+	mazeFile   = flag.String("maze-file", "maze01.txt", "path to custom maze file")
 )
 
 // Player is the player character
@@ -42,7 +48,7 @@ type Config struct {
 var cfg Config
 
 func loadConfig() error {
-	f, err := os.Open("config.json")
+	f, err := os.Open(*configFile)
 	if err != nil {
 		return err
 	}
@@ -58,7 +64,7 @@ func loadConfig() error {
 }
 
 func loadMaze() error {
-	f, err := os.Open("maze01.txt")
+	f, err := os.Open(*mazeFile)
 	if err != nil {
 		return err
 	}
@@ -247,6 +253,8 @@ func cleanup() {
 }
 
 func main() {
+	flag.Parse()
+
 	// initialize game
 	initialize()
 	defer cleanup()
